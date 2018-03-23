@@ -16,6 +16,10 @@
   <property name="windowTitle">
    <string>Nsfw Report Explorer v1.0 by MAX</string>
   </property>
+  <property name="windowIcon">
+   <iconset>
+    <normaloff>icons/icon-searchfolder.png</normaloff>icons/icon-searchfolder.png</iconset>
+  </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
     <item>
@@ -32,6 +36,9 @@
       <layout class="QHBoxLayout" name="horizontalLayout">
        <item>
         <widget class="QToolButton" name="btnScannFolder">
+         <property name="toolTip">
+          <string>Escanear Directorio.</string>
+         </property>
          <property name="accessibleName">
           <string>Escanear Directorio.</string>
          </property>

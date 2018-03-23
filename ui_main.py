@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'ui_main.ui'
 #
-# Created by: PyQt5 UI code generator 5.7
+# Created by: PyQt5 UI code generator 5.10.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -13,6 +13,9 @@ class Ui_MainWindow(object):
         MainWindow.setObjectName("MainWindow")
         MainWindow.setEnabled(True)
         MainWindow.resize(1071, 734)
+        icon = QtGui.QIcon()
+        icon.addPixmap(QtGui.QPixmap("icons/icon-searchfolder.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        MainWindow.setWindowIcon(icon)
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         self.verticalLayout = QtWidgets.QVBoxLayout(self.centralwidget)
@@ -25,8 +28,6 @@ class Ui_MainWindow(object):
         self.horizontalLayout.setObjectName("horizontalLayout")
         self.btnScannFolder = QtWidgets.QToolButton(self.groupBox)
         self.btnScannFolder.setText("")
-        icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("icons/icon-searchfolder.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.btnScannFolder.setIcon(icon)
         self.btnScannFolder.setIconSize(QtCore.QSize(48, 48))
         self.btnScannFolder.setObjectName("btnScannFolder")
@@ -155,6 +156,7 @@ class Ui_MainWindow(object):
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "Nsfw Report Explorer v1.0 by MAX"))
+        self.btnScannFolder.setToolTip(_translate("MainWindow", "Escanear Directorio."))
         self.btnScannFolder.setAccessibleName(_translate("MainWindow", "Escanear Directorio."))
         self.btnOpenFolder.setToolTip(_translate("MainWindow", "Abrir Reporte."))
         self.btnCloseFolder.setToolTip(_translate("MainWindow", "Cerrar Reporte."))
