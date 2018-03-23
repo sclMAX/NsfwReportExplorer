@@ -57,8 +57,10 @@ class UiMain (Ui_MainWindow, QtWidgets.QDialog):
                     caption='En que Directorio guardo el Reporte?')
                 if folder:
                     self.__reportPath = folder
-                    newMiniatureFolder = Path(
-                        Path(folder).joinpath(miniatureFolder)).mkdir()
+                    try:
+                        newMiniatureFolder = Path(Path(folder).joinpath(miniatureFolder)).mkdir()
+                    except(FileExistsError):
+                        newMiniatureFolder = Path(folder).joinpath(miniatureFolder)
 
                 else:
                     return
