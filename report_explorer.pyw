@@ -12,7 +12,7 @@ miniatureFolder = 'miniature'
 reportFileName = 'reporte.json'
 
 
-class UiMain (Ui_MainWindow, QtWidgets.QDialog):
+class UiMain (Ui_MainWindow, QtWidgets.QWidget):
     __reportPath = ''
     __isChange = False
 
@@ -148,7 +148,8 @@ class UiMain (Ui_MainWindow, QtWidgets.QDialog):
         self.ui.btnSave.setEnabled(False)
 
     def scann(self):
-        self.scanner = UiScanner(self)
+        self.scanner = QtWidgets.QDialog(self)
+        self.scanner.ui = UiScanner(self.scanner)
         self.scanner.exec_()
 if __name__ == "__main__":
     import sys
