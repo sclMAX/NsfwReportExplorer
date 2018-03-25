@@ -4,15 +4,15 @@ from pathlib import Path
 from keras.preprocessing import image
 from keras.applications.imagenet_utils import preprocess_input
 from keras.models import model_from_json
+from keras import backend as K
 import numpy as np
 from time import time, sleep
 import itertools
-import threading
 
 miniatureFolder = 'miniatures'
 cNormal = QtGui.QColor('green')
 cDanger = QtGui.QColor('red')
-cWarning = QtGui.QColor('yellow')
+cWarning = QtGui.QColor('silver')
 
 
 def searching_all_files(path: Path):
@@ -27,10 +27,32 @@ def searching_all_files(path: Path):
     return file_list
 
 
+class Loading(QtCore.QThread):
+    loading = QtCore.pyqtSignal(str)
+    isStop = False
+
+    def __init__(self, parent=None, text='Loading...'):
+        super().__init__(parent)
+        self.msg = text
+
+    @QtCore.pyqtSlot()
+    def stop(self):
+        self.isStop = True
+        self.exit()
+
+    def run(self):
+        for c in itertools.cycle([' |', ' /', ' -', ' \\']):
+            if not self.isStop:
+                break
+            self.loading.emit(self.msg + c)
+            sleep(0.1)
+
+
 class NsfwSacnner(QtCore.QThread):
     # Model Settings
     weight_file = 'model/max_open_nsfw.h5'
     model_file = 'model/max_open_nsfw.json'
+    model = None
     # Time Vars
     ti = time()
     tf = time()
@@ -51,19 +73,32 @@ class NsfwSacnner(QtCore.QThread):
     status = QtCore.pyqtSignal(str)
     progressSetup = QtCore.pyqtSignal(int)
     progress = QtCore.pyqtSignal(int)
+    # Slots
+    isCanceled = False
 
     def __init__(self, parent=None, scannFolder='', score=0.15):
         super().__init__(parent)
+        self.thparent = parent
         self.scannFolder = scannFolder
         self.score = score
 
+    def loadading(self, msg, idx):
+        chars = [' |', ' /', ' -', ' \\']
+        if not(idx < len(chars)): 
+            idx = 0
+        self.state.emit(self.msg + chars[idx])
+        return idx
+
     def loadModel(self):
         try:
-            self.log.emit('Cargando Modelo...', cNormal)
+            K.clear_session()
+            msg = 'Cargando Modelo...'
+            self.log.emit(msg, cNormal)
             json_file = open(self.model_file, 'r')
             loaded_model_json = json_file.read()
+            msg = 'Configurando Modelo...'
             self.log.emit('Modelo Cargado!', cNormal)
-            self.log.emit('Configurando Modelo...', cNormal)
+            self.log.emit(msg, cNormal)
             model = model_from_json(loaded_model_json)
             model.load_weights(self.weight_file)
             self.log.emit('Modelo Configurado!', cNormal)
@@ -96,10 +131,15 @@ class NsfwSacnner(QtCore.QThread):
         txt = 'A: %d de %d | Img In: %d de %d | NoImg: %d | T: %s | ETA: %s @ %.2f A/seg' % data
         self.status.emit(txt)
 
+    @QtCore.pyqtSlot()
+    def cancel(self):
+        self.isCanceled = True
+
     def run(self):
         self.ti = time()
-        model = self.loadModel()
-        if model:
+        if(not self.model):
+            self.model = self.loadModel()
+        if self.model:
             self.log.emit('Buscando archivos...', cNormal)
             fileList = searching_all_files(self.scannFolder)
             self.totalFiles = len(fileList)
@@ -110,12 +150,14 @@ class NsfwSacnner(QtCore.QThread):
             msg = ''
             color = cNormal
             for f in fileList:
+                if(self.isCanceled):
+                    break
                 file_path = f
                 self.currentFile += 1
                 self.progress.emit(self.currentFile)
                 try:
                     self.state.emit('Escaneando: %s' % (file_path))
-                    resultado = self.isPorno(model, file_path)
+                    resultado = self.isPorno(self.model, file_path)
                     self.imageFiles += 1
                     if(resultado >= self.score):
                         self.filesInReport += 1
@@ -158,6 +200,7 @@ class UiScanner(QtWidgets.QDialog, Ui_dlgNsfwScanner):
     # Scann Vars
     scannFolder = ''
     saveFolder = ''
+    isScanning = False
     # Report Vars
     reporte = []
     score = 0.15
@@ -169,7 +212,7 @@ class UiScanner(QtWidgets.QDialog, Ui_dlgNsfwScanner):
         self.resize(self.groupBox.size())
         # Buttons Commands
         self.btnScannFolder.clicked.connect(self.selScannFolder)
-        self.btnClose.clicked.connect(self.close)
+        self.btnClose.clicked.connect(self.btnClose_Click)
         self.btnSaveFolder.clicked.connect(self.selSaveFolder)
         self.btnStart.clicked.connect(self.btnStart_Click)
         self.btnSave.clicked.connect(self.saveReport)
@@ -177,6 +220,17 @@ class UiScanner(QtWidgets.QDialog, Ui_dlgNsfwScanner):
         self.selScore.valueChanged.connect(self.progressBarScore.setValue)
         self.progressBarScore.valueChanged.connect(self.setScore)
         self.selScore.setValue((self.score * 100))
+
+    def btnClose_Click(self):
+        if(self.isScanning):
+            if(self.scann.isRunning):
+                q = QtWidgets.QMessageBox.question(
+                    self, 'Escaneo en Proceso!', 'Desa salir de todos modos?')
+                if(q == QtWidgets.QMessageBox.No):
+                    return
+                self.scann.cancel()
+                self.scann.wait()
+        self.close()
 
     def showDetalles(self, isShow):
         self.progressBar.setVisible(isShow)
@@ -220,28 +274,33 @@ class UiScanner(QtWidgets.QDialog, Ui_dlgNsfwScanner):
             self.btnScannFolder.setEnabled(False)
             self.btnSaveFolder.setEnabled(False)
             self.txtLog.clear()
-            scann = NsfwSacnner(
+            self.scann = NsfwSacnner(
                 parent=self,
                 scannFolder=self.scannFolder,
                 score=self.score)
-            scann.finish.connect(self.scannFinish)
-            scann.log.connect(self.setLog)
-            scann.state.connect(self.setState)
-            scann.status.connect(self.updateScannStatus)
-            scann.progressSetup.connect(self.progressBar.setMaximum)
-            scann.progress.connect(self.progressBar.setValue)
-            scann.start()
+            self.scann.finish.connect(self.scannFinish)
+            self.scann.log.connect(self.setLog)
+            self.scann.state.connect(self.setState)
+            self.scann.status.connect(self.updateScannStatus)
+            self.scann.progressSetup.connect(self.progressBar.setMaximum)
+            self.scann.progress.connect(self.progressBar.setValue)
+            self.scann.start()
+            self.isScanning = True
         except:
             self.btnScannFolder.setEnabled(True)
             self.btnSaveFolder.setEnabled(True)
             self.btnStart.setEnabled(True)
 
     def scannFinish(self, reporte):
+        self.isScanning = False
         if(reporte):
             self.reporte = reporte
             self.btnSave.setEnabled(True)
         else:
-            self.btnSave.setEnabled(False)            
+            if(self.scann.isRunning):
+                self.scann.exit()
+                self.scann.wait()
+            self.btnSave.setEnabled(False)
 
     def saveReport(self):
         self.accept()
