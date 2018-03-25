@@ -1,6 +1,6 @@
 from ui_main import Ui_MainWindow, QtWidgets, QtGui
-from nsfw_scanner import UiScanner
 from pathlib import Path
+from keras.preprocessing import image
 import webbrowser
 import json
 
@@ -8,8 +8,36 @@ miniatureFolder = 'miniature'
 reportFileName = 'reporte.json'
 
 
+class ReporteListItem(QtWidgets.QListWidgetItem):
+    id: int
+    file_path: str
+    score: float
+    miniature: str
+    basePath: str
+
+    def __init__(self, id: int, file_path: str, score: float, miniature: str, basePath: str):
+        super().__init__()
+        self.id = id
+        self.file_path = file_path
+        self.score = score
+        self.miniature = miniature
+        self.basePath = basePath
+        self.setup()
+
+    def setup(self):
+        self.setText(str(round((self.score * 100), 2)) + ' %')
+        self.icon1 = QtGui.QIcon()
+        self.iconFile = str(Path(self.basePath).joinpath(
+            miniatureFolder, self.miniature))
+        self.icon1.addPixmap(QtGui.QPixmap(self.iconFile),
+                             QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.setIcon(self.icon1)
+        self.setToolTip(self.file_path)
+
+
 class UiMain (QtWidgets.QMainWindow, Ui_MainWindow):
     __reportPath = ''
+    saveFolder = ''
     __isChange = False
 
     def __init__(self):
@@ -24,7 +52,7 @@ class UiMain (QtWidgets.QMainWindow, Ui_MainWindow):
         self.btnCloseFolder.clicked.connect(self.clearAll)
         self.btnGrid.clicked.connect(self.setGrid)
         self.btnList.clicked.connect(self.setList)
-        self.btnSave.clicked.connect(self.saveReport)
+        self.btnSave.clicked.connect(self.btnSave_Click)
         self.btnScannFolder.clicked.connect(self.scann)
         # Report comands
         self.listReporte.itemSelectionChanged.connect(self.itemSeleccionado)
@@ -43,27 +71,66 @@ class UiMain (QtWidgets.QMainWindow, Ui_MainWindow):
         finally:
             self.progressBar.setVisible(False)
 
-    def saveReport(self):
-        if(self.__isChange):
-            try:
-                self.progressBar.setVisible(True)
-                self.progressBar.setMaximum(0)
-                folder = QtWidgets.QFileDialog.getExistingDirectory(
-                    caption='En que Directorio guardo el Reporte?')
-                if folder:
-                    self.__reportPath = folder
-                    try:
-                        newMiniatureFolder = Path(
-                            Path(folder).joinpath(miniatureFolder)).mkdir()
-                    except(FileExistsError):
-                        newMiniatureFolder = Path(
-                            folder).joinpath(miniatureFolder)
+    def btnSave_Click(self):
+        if(self.listReporte.count()):
+            reporte = []
+            for i in range(self.listReporte.count()):
+                reporte.append({
+                    'id': self.listReporte.item(i).id,
+                    'file_path': self.listReporte.item(i).file_path,
+                    'score': self.listReporte.item(i).score,
+                    'miniature': self.listReporte.item(i).miniature
+                })
+            if(self.saveReport(reporte, False)):
+                self.__reportPath = self.saveFolder
+                self.btnSave.setEnabled(False)
+                self.__isChange = False
+                self.addItems()
+        else:
+            self.btnSave.setEnabled(False)
 
-                else:
-                    return
-
-            finally:
-                self.progressBar.setVisible(False)
+    def saveReport(self, reporte, isNew=False):
+        if(not isNew):
+            self.saveFolder = QtWidgets.QFileDialog.getExistingDirectory(
+                caption='En que Directorio guardo el Reporte?')
+        if(not self.saveFolder):
+            return False
+        try:
+            self.progressBar.setVisible(True)
+            self.progressBar.repaint()
+            self.progressBar.setMaximum(0)
+            self.lblOpenFolder.setText('Guardando reporte...')
+            self.lblOpenFolder.repaint()
+            newMiniatureFolder = Path(
+                self.saveFolder).joinpath(miniatureFolder)
+            if(not Path(newMiniatureFolder).exists()):
+                try:
+                    newMiniatureFolder = Path(
+                        Path(self.saveFolder).joinpath(miniatureFolder)).mkdir()
+                except(FileExistsError):
+                    return False
+            if(len(reporte)):
+                reporteFile = str(
+                    Path(self.saveFolder).joinpath('reporte.json'))
+                json.dump(reporte, open(reporteFile, 'w'))
+                totalItems = len(reporte)
+                currentItem = 0
+                self.progressBar.setMaximum(totalItems)
+                for i in reporte:
+                    currentItem += 1
+                    self.lblOpenFolder.setText(
+                        'Creando miniatura %d de %d' % (currentItem, totalItems))
+                    self.lblOpenFolder.repaint()
+                    img = image.load_img(i['file_path'], target_size=(80, 80))
+                    file = str(
+                        Path(newMiniatureFolder).joinpath(i['miniature']))
+                    img.save(open(file, 'w'))
+                    self.progressBar.setValue(currentItem)
+            return True
+        finally:
+            self.lblOpenFolder.setText(
+                'Reporte guardado en: ' + self.saveFolder)
+            self.progressBar.setVisible(False)
 
     def setList(self):
         self.btnList.setEnabled(False)
@@ -108,22 +175,21 @@ class UiMain (QtWidgets.QMainWindow, Ui_MainWindow):
             try:
                 self.progressBar.setVisible(True)
                 self.progressBar.setMaximum(0)
-                items = json.load(open(reporteFile))
-                self.lblSelCount.setText('%d / %d' % (0, len(items)))
-                items = sorted(items, key=lambda item: item['score'])
-                self.progressBar.setMaximum(len(items))
+                reporte = json.load(open(reporteFile))
+                self.lblSelCount.setText('%d / %d' % (0, len(reporte)))
+                reporte = sorted(reporte, key=lambda item: item['score'])
+                self.progressBar.setMaximum(len(reporte))
                 pv = 0
-                for item in items:
+                self.listReporte.clear()
+                for item in reporte:
                     pv += 1
-                    li = QtWidgets.QListWidgetItem()
-                    li.setText(str(round((item['score'] * 100), 2)) + ' %')
-                    icon1 = QtGui.QIcon()
-                    iconFile = str(Path(self.__reportPath).joinpath(
-                        miniatureFolder, item['miniature']))
-                    icon1.addPixmap(QtGui.QPixmap(iconFile),
-                                    QtGui.QIcon.Normal, QtGui.QIcon.Off)
-                    li.setIcon(icon1)
-                    li.setToolTip(item['file_path'])
+                    li = ReporteListItem(
+                        id=int(item['id']),
+                        file_path=str(item['file_path']),
+                        score=float(item['score']),
+                        miniature=str(item['miniature']),
+                        basePath=str(path)
+                    )
                     self.listReporte.addItem(li)
                     self.progressBar.setValue(pv)
                 self.btnCloseFolder.setEnabled(True)
@@ -145,9 +211,13 @@ class UiMain (QtWidgets.QMainWindow, Ui_MainWindow):
         self.btnSave.setEnabled(False)
 
     def scann(self):
+        from nsfw_scanner import UiScanner
         self.scanner = UiScanner()
-        resultado = self.scanner.exec_()
-        print(resultado)
+        if(self.scanner.exec_()):
+            self.saveFolder = self.scanner.saveFolder
+            if(self.saveReport(self.scanner.reporte, True)):
+                self.__reportPath = self.scanner.saveFolder
+                self.addItems()
 
 
 if __name__ == "__main__":
