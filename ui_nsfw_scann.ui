@@ -104,6 +104,12 @@
           </item>
           <item>
            <widget class="QLabel" name="lblScannFolder">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
             <property name="maximumSize">
              <size>
               <width>16777215</width>
@@ -460,8 +466,6 @@
        </widget>
       </item>
      </layout>
-     <zorder>selScore</zorder>
-     <zorder>progressBarScore</zorder>
      <zorder>progressBar</zorder>
      <zorder>lblProgressBar</zorder>
     </widget>

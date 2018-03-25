@@ -101,12 +101,10 @@ class UiMain (QtWidgets.QMainWindow, Ui_MainWindow):
             self.progressBar.setMaximum(0)
             self.lblOpenFolder.setText('Guardando reporte...')
             self.lblOpenFolder.repaint()
-            newMiniatureFolder = Path(
-                self.saveFolder).joinpath(miniatureFolder)
+            newMiniatureFolder = Path(self.saveFolder).joinpath(miniatureFolder)
             if(not Path(newMiniatureFolder).exists()):
                 try:
-                    newMiniatureFolder = Path(
-                        Path(self.saveFolder).joinpath(miniatureFolder)).mkdir()
+                    Path(newMiniatureFolder).mkdir()
                 except(FileExistsError):
                     return False
             if(len(reporte)):
@@ -216,7 +214,7 @@ class UiMain (QtWidgets.QMainWindow, Ui_MainWindow):
         if(self.scanner.exec_()):
             self.saveFolder = self.scanner.saveFolder
             if(self.saveReport(self.scanner.reporte, True)):
-                self.__reportPath = self.scanner.saveFolder
+                self.__reportPath = self.saveFolder
                 self.addItems()
 
 
