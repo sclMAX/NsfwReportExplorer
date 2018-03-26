@@ -191,8 +191,7 @@ class NsfwSacnner(QtCore.QThread):
             tir = self.filesInReport
             self.log.emit('%d Imagenes en el Reporte!' %
                           (tir), cNormal if(tir > 0) else cDanger)
-            self.finish.emit(self.reporte if(tir > 9)else [])
-            return
+            self.finish.emit(self.reporte if(tir > 0)else [])
         else:
             self.finish.emit(None)
             return
@@ -204,6 +203,7 @@ class UiScanner(QtWidgets.QDialog, Ui_dlgNsfwScanner):
     scannFolder = ''
     saveFolder = ''
     isScanning = False
+    timer = QtCore.QTimer()
     # Report Vars
     reporte = []
     score = 0.15
@@ -212,6 +212,7 @@ class UiScanner(QtWidgets.QDialog, Ui_dlgNsfwScanner):
         super().__init__()
         self.setupUi(self)
         self.showDetalles(False)
+        self.lblTime.setVisible(False)
         self.resize(self.groupBox.size())
         # Buttons Commands
         self.btnScannFolder.clicked.connect(self.selScannFolder)
@@ -223,6 +224,12 @@ class UiScanner(QtWidgets.QDialog, Ui_dlgNsfwScanner):
         self.selScore.valueChanged.connect(self.progressBarScore.setValue)
         self.progressBarScore.valueChanged.connect(self.setScore)
         self.selScore.setValue((self.score * 100))
+        self.timer.timeout.connect(self.timeOut)
+        self.timer.setInterval(500)
+
+    def timeOut(self):
+        self.lblTime.setEnabled(not self.lblTime.isEnabled())
+        self.lblTime.repaint()
 
     def btnClose_Click(self):
         if(self.isScanning):
@@ -273,6 +280,8 @@ class UiScanner(QtWidgets.QDialog, Ui_dlgNsfwScanner):
     def btnStart_Click(self):
         try:
             self.showDetalles(True)
+            self.lblTime.setVisible(True)
+            self.timer.start()
             self.btnStart.setEnabled(False)
             self.btnScannFolder.setEnabled(False)
             self.btnSaveFolder.setEnabled(False)
@@ -290,12 +299,14 @@ class UiScanner(QtWidgets.QDialog, Ui_dlgNsfwScanner):
             self.scann.start()
             self.isScanning = True
         except:
+            self.lblTime.setVisible(False)
             self.btnScannFolder.setEnabled(True)
             self.btnSaveFolder.setEnabled(True)
             self.btnStart.setEnabled(True)
 
     def scannFinish(self, reporte):
         self.isScanning = False
+        self.lblTime.setVisible(False)
         if(reporte):
             self.reporte = reporte
             self.btnSave.setEnabled(True)
@@ -304,6 +315,7 @@ class UiScanner(QtWidgets.QDialog, Ui_dlgNsfwScanner):
                 self.scann.exit()
                 self.scann.wait()
             self.btnSave.setEnabled(False)
+        self.timer.stop()
 
     def saveReport(self):
         logFile = Path(self.saveFolder).joinpath('log.txt')
