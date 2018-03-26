@@ -84,7 +84,7 @@ class NsfwSacnner(QtCore.QThread):
 
     def loadading(self, msg, idx):
         chars = [' |', ' /', ' -', ' \\']
-        if not(idx < len(chars)): 
+        if not(idx < len(chars)):
             idx = 0
         self.state.emit(self.msg + chars[idx])
         return idx
@@ -112,7 +112,10 @@ class NsfwSacnner(QtCore.QThread):
                 json_file.close()
 
     def isPorno(self, model, img_path):
-        img = image.load_img(img_path, target_size=(224, 224))
+        try:
+            img = image.load_img(img_path, target_size=(224, 224))
+        except(SyntaxError):
+            raise ValueError()
         x = image.img_to_array(img)
         x = np.expand_dims(x, axis=0)
         x = preprocess_input(x)
@@ -303,6 +306,9 @@ class UiScanner(QtWidgets.QDialog, Ui_dlgNsfwScanner):
             self.btnSave.setEnabled(False)
 
     def saveReport(self):
+        logFile = Path(self.saveFolder).joinpath('log.txt')
+        with open(logFile, 'w') as log:
+             log.write(str(self.txtLog.toPlainText()))
         self.accept()
 
     def setLog(self, state, color, isAnimate=False):

@@ -1,4 +1,4 @@
-from ui_main import Ui_MainWindow, QtWidgets, QtGui
+from ui_main import Ui_MainWindow, QtWidgets, QtGui, QtCore
 from pathlib import Path
 from keras.preprocessing import image
 import webbrowser
@@ -6,6 +6,53 @@ import json
 
 miniatureFolder = 'miniature'
 reportFileName = 'reporte.json'
+
+
+class SaveReporte(QtCore.QThread):
+    reporte = []
+    saveFolder = ''
+    # Signals
+    result = QtCore.pyqtSignal(bool)
+    progressSetup = QtCore.pyqtSignal(int)
+    progress = QtCore.pyqtSignal(int)
+    state = QtCore.pyqtSignal(str)
+
+    def __init__(self, parent=None, reporte=[], saveFolder=''):
+        super().__init__(parent)
+        self.reporte = reporte
+        self.saveFolder = saveFolder
+
+    def run(self):
+        newMiniatureFolder = Path(self.saveFolder).joinpath(miniatureFolder)
+        if(not Path(newMiniatureFolder).exists()):
+            try:
+                Path(newMiniatureFolder).mkdir()
+            except(FileExistsError):
+                self.state.emit('Error al crear el directorio de miniaturas!')
+                self.result.emit(False)
+                return
+        if(len(self.reporte)):
+            reporteFile = str(
+                Path(self.saveFolder).joinpath('reporte.json'))
+            self.state.emit('Guradando reporte...')
+            json.dump(self.reporte, open(reporteFile, 'w'))
+            totalItems = len(self.reporte)
+            currentItem = 0
+            self.progressSetup.emit(totalItems)
+            for i in self.reporte:
+                currentItem += 1
+                self.state.emit('Creando miniatura %d de %d' %
+                                (currentItem, totalItems))
+                try:
+                    img = image.load_img(i['file_path'], target_size=(80, 80))
+                    file = str(
+                        Path(newMiniatureFolder).joinpath(i['miniature']))
+                    img.save(open(file, 'w'))
+                except:
+                    continue
+                self.progress.emit(currentItem)
+            self.result.emit(True)
+            return
 
 
 class ReporteListItem(QtWidgets.QListWidgetItem):
@@ -81,13 +128,22 @@ class UiMain (QtWidgets.QMainWindow, Ui_MainWindow):
                     'score': self.listReporte.item(i).score,
                     'miniature': self.listReporte.item(i).miniature
                 })
-            if(self.saveReport(reporte, False)):
-                self.__reportPath = self.saveFolder
-                self.btnSave.setEnabled(False)
-                self.__isChange = False
-                self.addItems()
+            self.saveReport(reporte, False)
         else:
             self.btnSave.setEnabled(False)
+
+    def saveReportFinish(self, result):
+        if(result):
+            self.progressBar.setVisible(False)
+            self.setState('Reporte guardado en: ' + self.saveFolder)
+            self.__reportPath = self.saveFolder
+            self.btnSave.setEnabled(False)
+            self.__isChange = False
+            self.addItems()
+
+    def setState(self, msg):
+        self.lblOpenFolder.setText(msg)
+        self.lblOpenFolder.repaint()
 
     def saveReport(self, reporte, isNew=False):
         if(not isNew):
@@ -95,40 +151,16 @@ class UiMain (QtWidgets.QMainWindow, Ui_MainWindow):
                 caption='En que Directorio guardo el Reporte?')
         if(not self.saveFolder):
             return False
-        try:
-            self.progressBar.setVisible(True)
-            self.progressBar.repaint()
-            self.progressBar.setMaximum(0)
-            self.lblOpenFolder.setText('Guardando reporte...')
-            self.lblOpenFolder.repaint()
-            newMiniatureFolder = Path(self.saveFolder).joinpath(miniatureFolder)
-            if(not Path(newMiniatureFolder).exists()):
-                try:
-                    Path(newMiniatureFolder).mkdir()
-                except(FileExistsError):
-                    return False
-            if(len(reporte)):
-                reporteFile = str(
-                    Path(self.saveFolder).joinpath('reporte.json'))
-                json.dump(reporte, open(reporteFile, 'w'))
-                totalItems = len(reporte)
-                currentItem = 0
-                self.progressBar.setMaximum(totalItems)
-                for i in reporte:
-                    currentItem += 1
-                    self.lblOpenFolder.setText(
-                        'Creando miniatura %d de %d' % (currentItem, totalItems))
-                    self.lblOpenFolder.repaint()
-                    img = image.load_img(i['file_path'], target_size=(80, 80))
-                    file = str(
-                        Path(newMiniatureFolder).joinpath(i['miniature']))
-                    img.save(open(file, 'w'))
-                    self.progressBar.setValue(currentItem)
-            return True
-        finally:
-            self.lblOpenFolder.setText(
-                'Reporte guardado en: ' + self.saveFolder)
-            self.progressBar.setVisible(False)
+        self.progressBar.setVisible(True)
+        self.progressBar.repaint()
+        self.progressBar.setMaximum(0)
+        self.saveTask = SaveReporte(
+            self, reporte=reporte, saveFolder=self.saveFolder)
+        self.saveTask.state.connect(self.setState)
+        self.saveTask.progressSetup.connect(self.progressBar.setMaximum)
+        self.saveTask.progress.connect(self.progressBar.setValue)
+        self.saveTask.result.connect(self.saveReportFinish)
+        self.saveTask.start()
 
     def setList(self):
         self.btnList.setEnabled(False)
